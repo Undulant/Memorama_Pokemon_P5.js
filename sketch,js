@@ -1,0 +1,173 @@
+let cards = [];
+let cardImages = [];
+let firstCard = null;
+let secondCard = null;
+let waiting = false;
+const numPairs = 10;
+const cardSize = 100;
+const cols = 5;
+const rows = 4;
+const totalPokemons = 151; 
+
+async function setup() {
+  createCanvas(cols * cardSize, rows * cardSize);
+  
+  // Seleccionar 10 IDs aleatorios únicos entre 1 y 151
+  const randomIds = getRandomUniqueNumbers(1, totalPokemons, numPairs);
+  
+  // Cargar imágenes de Pokémon con los IDs seleccionados
+  for (let id of randomIds) {
+    let img = await loadPokemonImage(id);
+    cardImages.push(img);
+  }
+  createCards();
+
+  // Boton de reinicio
+  resetButton = createButton('Reiniciar Juego');
+  resetButton.size(140, 40);
+  resetButton.position((width - 140) / 2, height + 20);
+  resetButton.mousePressed(resetGame);
+  resetButton.style('font-size', '16px');
+}
+
+// Funcion para generar numeros aleatorios unicos
+function getRandomUniqueNumbers(min, max, count) {
+  let numbers = [];
+  while(numbers.length < count) {
+    let randomNum = Math.floor(Math.random() * (max - min + 1)) + min;
+    if(!numbers.includes(randomNum)) {
+      numbers.push(randomNum);
+    }
+  }
+  return numbers;
+}
+
+async function loadPokemonImage(id) {
+  let url = `https://pokeapi.co/api/v2/pokemon/${id}`;
+  // Se usa fetch para obtener la informacion del Pokemon
+  let data = await fetch(url).then(res => res.json());
+  let imgUrl = data.sprites.front_default;
+  // Cargar la imagen usando una funcion que retorna una promesa
+  let img = await loadImageAsync(imgUrl);
+  return img;
+}
+
+function loadImageAsync(url) {
+  return new Promise((resolve, reject) => {
+    loadImage(url, img => resolve(img), err => reject(err));
+  });
+}
+
+function createCards() {
+  // Se crean dos cartas para cada imagen (par)
+  for (let i = 0; i < cardImages.length; i++) {
+    let card1 = new Card(cardImages[i], i);
+    let card2 = new Card(cardImages[i], i);
+    cards.push(card1, card2);
+  }
+  // Se mezclan aleatoriamente las cartas
+  shuffle(cards, true);
+}
+
+function draw() {
+  background(220);
+  // Dibujar cada carta
+  for (let card of cards) {
+    card.show();
+  }
+  
+  // Si todas las cartas estan emparejadas se muestra un mensaje de victoria
+  if (cards.every(card => card.matched)) {
+    textSize(32);
+    fill(0);
+    textAlign(CENTER, CENTER);
+    text("¡Ganaste!", width / 2, height / 2);
+  }
+}
+
+class Card {
+  constructor(img, id) {
+    this.img = img;
+    this.id = id;
+    this.matched = false;
+    this.faceUp = false;
+    this.x = 0;
+    this.y = 0;
+  }
+  
+  show() {
+    // Se calcula la posición en base al indice actual
+    let index = cards.indexOf(this);
+    this.x = (index % cols) * cardSize;
+    this.y = floor(index / cols) * cardSize;
+    
+    stroke(0);
+    fill(255);
+    rect(this.x, this.y, cardSize, cardSize);
+    
+    if (this.faceUp || this.matched) {
+      // Si la carta esta volteada o ya ha sido emparejada se muestra la imagen
+      image(this.img, this.x, this.y, cardSize, cardSize);
+    } else {
+      // Si no esta volteada se muestra un reverso 
+      fill(100);
+      rect(this.x, this.y, cardSize, cardSize);
+    }
+  }
+  
+  contains(mx, my) {
+    // Verifica si el punto (mx, my) se encuentra dentro de la carta
+    return (mx > this.x && mx < this.x + cardSize &&
+            my > this.y && my < this.y + cardSize);
+  }
+}
+
+function mousePressed() {
+  // Si se esta en periodo de espera (para voltear cartas) no se permite otra acción
+  if (waiting) return;
+  
+  // Verificar si se hace clic en alguna carta que no este volteada ni emparejada
+  for (let card of cards) {
+    if (!card.faceUp && !card.matched && card.contains(mouseX, mouseY)) {
+      card.faceUp = true;
+      if (!firstCard) {
+        firstCard = card;
+      } else if (!secondCard && card !== firstCard) {
+        secondCard = card;
+        checkMatch();
+      }
+      break; // Solo se voltea una carta por clic
+    }
+  }
+}
+
+function checkMatch() {
+  if (firstCard.id === secondCard.id) {
+    // Si coinciden, se marcan como emparejadas
+    firstCard.matched = true;
+    secondCard.matched = true;
+    resetSelection();
+  } else {
+    // Si no coinciden, se espera un segundo antes de voltearlas nuevamente
+    waiting = true;
+    setTimeout(() => {
+      firstCard.faceUp = false;
+      secondCard.faceUp = false;
+      resetSelection();
+      waiting = false;
+    }, 1000);
+  }
+}
+
+function resetSelection() {
+  firstCard = null;
+  secondCard = null;
+}
+
+function resetGame() {
+  cards = [];
+  createCards();
+  firstCard = null;
+  secondCard = null;
+  waiting = false;
+}
